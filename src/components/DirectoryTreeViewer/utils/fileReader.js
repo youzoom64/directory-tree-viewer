@@ -86,3 +86,7 @@ export const readDirectory = async (entry, parentPath = '') => {
     };
   }
 };
+
+export default {
+  readDirectory
+};

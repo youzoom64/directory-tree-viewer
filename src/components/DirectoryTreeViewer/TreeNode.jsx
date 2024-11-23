@@ -22,32 +22,28 @@ export const TreeNode = ({ node, level = 0, openPaths, onToggle }) => {
     );
   }
 
-  // 読み取り不可のディレクトリは親の子要素として表示
-  if (node.isUnreadable) {
-    return (
-      <div
-        className="flex items-center py-1 cursor-default hover:bg-gray-100 opacity-50"
-        style={{ paddingLeft: `${indent}px` }}
-      >
-        <FolderIcon />
-        <span className="truncate">{node.name} (unreadable)</span>
-      </div>
-    );
-  }
-
-  // 通常のディレクトリ表示
+  // ディレクトリの表示（読み取り不可の場合も矢印を表示）
   return (
     <div>
       <div
-        className="flex items-center py-1 cursor-pointer hover:bg-gray-100"
+        className={`flex items-center py-1 hover:bg-gray-100 ${
+          node.isUnreadable ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+        }`}
         style={{ paddingLeft: `${indent}px` }}
-        onClick={() => onToggle(node)}
+        onClick={() => !node.isUnreadable && onToggle(node)}
       >
-        {isOpen ? <ChevronDown /> : <ChevronRight />}
+        {/* 読み取り不可でも矢印は表示（クリックは無効） */}
+        <div className={node.isUnreadable ? 'opacity-50' : ''}>
+          {isOpen ? <ChevronDown /> : <ChevronRight />}
+        </div>
         <FolderIcon />
-        <span className="truncate">{node.name}</span>
+        <span className="truncate">
+          {node.name}
+          {node.isUnreadable ? ' (unreadable)' : ''}
+        </span>
       </div>
-      {isOpen && node.children && node.children.length > 0 && (
+      {/* 読み取り不可の場合は子要素を表示しない */}
+      {!node.isUnreadable && isOpen && node.children && (
         <div>
           {node.children.map((child, index) => (
             <TreeNode 
@@ -63,3 +59,5 @@ export const TreeNode = ({ node, level = 0, openPaths, onToggle }) => {
     </div>
   );
 };
+
+export default TreeNode;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Card, CardContent } from './ui/Card';
 import { DropZone } from './ui/DropZone';
 import { TreeNode } from './TreeNode';
@@ -14,42 +14,13 @@ const DirectoryTreeViewer = () => {
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({ files: 0, folders: 0 });
 
-  const updateTextView = useCallback(() => {
-    if (structure && structure[0]) {
-      const text = generateTreeText(structure[0], openPaths);
-      setTextView(text);
-    }
-  }, [structure, openPaths]);
-
-  useEffect(() => {
-    updateTextView();
-  }, [updateTextView]);
-
-  const toggleFolder = useCallback((node) => {
-    if (!node || node.type !== 'directory') return;
-
-    setOpenPaths(prev => {
-      const next = new Set(prev);
-      if (next.has(node.path)) {
-        next.delete(node.path);
-      } else {
-        next.add(node.path);
-        const parentPath = node.path.split('/').slice(0, -1).join('/');
-        if (parentPath) {
-          next.add(parentPath);
-        }
-      }
-      return next;
-    });
-  }, []);
-
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();
     setDragOver(false);
     setError(null);
     setLoading(true);
     setStats({ files: 0, folders: 0 });
-
+    
     try {
       const items = Array.from(e.dataTransfer.items);
       const entries = items
@@ -61,17 +32,7 @@ const DirectoryTreeViewer = () => {
       }
 
       const results = await Promise.all(
-        entries.map(async entry => {
-          try {
-            return await readDirectory(entry, {
-              onFileCount: () => setStats(prev => ({ ...prev, files: prev.files + 1 })),
-              onFolderCount: () => setStats(prev => ({ ...prev, folders: prev.folders + 1 }))
-            });
-          } catch (error) {
-            console.error('Error processing entry:', error);
-            return null;
-          }
-        })
+        entries.map(async entry => readDirectory(entry))
       );
 
       const validResults = results.filter(Boolean);
@@ -79,9 +40,12 @@ const DirectoryTreeViewer = () => {
         throw new Error('Failed to read directory structure');
       }
 
+      // 初期状態ではルートと直下の子ディレクトリを開く
       const initialOpenPaths = getInitialOpenPaths(validResults);
+      
       setStructure(validResults);
       setOpenPaths(initialOpenPaths);
+      setTextView(generateTreeText(validResults[0], initialOpenPaths));
 
     } catch (error) {
       console.error('Drop error:', error);
@@ -90,6 +54,27 @@ const DirectoryTreeViewer = () => {
       setLoading(false);
     }
   }, []);
+
+  const toggleFolder = useCallback((node) => {
+    if (!node || node.type !== 'directory' || node.isUnreadable) return;
+
+    setOpenPaths(prev => {
+      const next = new Set(prev);
+      if (next.has(node.path)) {
+        next.delete(node.path);
+      } else {
+        next.add(node.path);
+      }
+      return next;
+    });
+  }, []);
+
+  // openPathsが変更されたらテキスト表示を更新
+  React.useEffect(() => {
+    if (structure && structure[0]) {
+      setTextView(generateTreeText(structure[0], openPaths));
+    }
+  }, [structure, openPaths]);
 
   return (
     <div className="flex gap-4 p-4 h-screen">
@@ -130,5 +115,4 @@ const DirectoryTreeViewer = () => {
   );
 };
 
-// コンポーネントの定義と同じレベルでexport
 export default DirectoryTreeViewer;
