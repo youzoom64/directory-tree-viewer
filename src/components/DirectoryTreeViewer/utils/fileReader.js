@@ -1,56 +1,88 @@
-export const readEntryContents = async (dirReader) => {
-    const entries = await new Promise((resolve) => {
-      dirReader.readEntries(resolve);
-    });
-    
-    if (entries.length) {
-      const moreEntries = await readEntryContents(dirReader);
-      return [...entries, ...moreEntries];
+export const readDirectory = async (entry, parentPath = '') => {
+  try {
+    if (entry.isFile) {
+      return {
+        name: entry.name,
+        type: 'file',
+        path: entry.fullPath || `${parentPath}/${entry.name}`
+      };
     }
+
+    // ディレクトリ読み取りを試行
+    const reader = entry.createReader();
+    let entries = [];
     
-    return entries;
-  };
-  
-  export const readDirectory = async (entry, callbacks = {}) => {
-    const { onFileCount, onFolderCount } = callbacks;
-  
     try {
-      if (entry.isFile) {
-        onFileCount?.();
-        return {
-          name: entry.name,
-          type: 'file',
-          path: entry.fullPath
-        };
-      }
-  
-      onFolderCount?.();
-      const dirReader = entry.createReader();
-      const entries = await readEntryContents(dirReader);
-      
-      const children = await Promise.all(
-        entries.map(async (childEntry) => {
-          try {
-            return await readDirectory(childEntry, callbacks);
-          } catch (e) {
-            console.error(`Error reading ${childEntry.fullPath}:`, e);
-            return null;
-          }
-        })
-      );
-  
+      entries = await new Promise((resolve, reject) => {
+        const results = [];
+        function readEntries() {
+          reader.readEntries((entries) => {
+            if (entries.length === 0) {
+              resolve(results);
+            } else {
+              results.push(...entries);
+              readEntries();
+            }
+          }, reject);
+        }
+        readEntries();
+      });
+    } catch (error) {
+      // 読み取りエラーの場合でも、現在の階層構造を維持
       return {
         name: entry.name,
         type: 'directory',
-        path: entry.fullPath,
-        children: children.filter(Boolean).sort((a, b) => {
-          if (a.type === 'directory' && b.type === 'file') return -1;
-          if (a.type === 'file' && b.type === 'directory') return 1;
-          return a.name.localeCompare(b.name);
-        })
+        path: entry.fullPath || `${parentPath}/${entry.name}`,
+        isUnreadable: true,
+        children: []
       };
-    } catch (error) {
-      console.error('Error reading directory:', error);
-      throw error;
     }
-  };
+
+    // 子要素の処理（親のパスを渡す）
+    const children = await Promise.all(
+      entries.map(async (childEntry) => {
+        try {
+          return await readDirectory(
+            childEntry, 
+            entry.fullPath || `${parentPath}/${entry.name}`
+          );
+        } catch (error) {
+          if (childEntry.isDirectory) {
+            // ディレクトリのエラーの場合、unreadableとして返す
+            return {
+              name: childEntry.name,
+              type: 'directory',
+              path: childEntry.fullPath || `${entry.fullPath}/${childEntry.name}`,
+              isUnreadable: true,
+              children: []
+            };
+          }
+          return null;
+        }
+      })
+    );
+
+    return {
+      name: entry.name,
+      type: 'directory',
+      path: entry.fullPath || `${parentPath}/${entry.name}`,
+      children: children.filter(Boolean).sort((a, b) => {
+        // ディレクトリを先に、ファイルを後に
+        if (a.type === 'directory' && b.type === 'file') return -1;
+        if (a.type === 'file' && b.type === 'directory') return 1;
+        return a.name.localeCompare(b.name);
+      })
+    };
+
+  } catch (error) {
+    console.error('Directory read error:', error);
+    // エラー時も階層構造を維持
+    return {
+      name: entry.name,
+      type: 'directory',
+      path: entry.fullPath || `${parentPath}/${entry.name}`,
+      isUnreadable: true,
+      children: []
+    };
+  }
+};

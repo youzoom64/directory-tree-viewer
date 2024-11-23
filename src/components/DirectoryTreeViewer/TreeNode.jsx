@@ -1,3 +1,4 @@
+import React from 'react';
 import { FileIcon } from './icons/FileIcon';
 import { FolderIcon } from './icons/FolderIcon';
 import { ChevronDown, ChevronRight } from './icons/ChevronIcons';
@@ -8,6 +9,7 @@ export const TreeNode = ({ node, level = 0, openPaths, onToggle }) => {
   const indent = level * 16;
   const isOpen = openPaths.has(node.path);
 
+  // ファイルの表示
   if (node.type === 'file') {
     return (
       <div
@@ -20,6 +22,20 @@ export const TreeNode = ({ node, level = 0, openPaths, onToggle }) => {
     );
   }
 
+  // 読み取り不可のディレクトリは親の子要素として表示
+  if (node.isUnreadable) {
+    return (
+      <div
+        className="flex items-center py-1 cursor-default hover:bg-gray-100 opacity-50"
+        style={{ paddingLeft: `${indent}px` }}
+      >
+        <FolderIcon />
+        <span className="truncate">{node.name} (unreadable)</span>
+      </div>
+    );
+  }
+
+  // 通常のディレクトリ表示
   return (
     <div>
       <div
@@ -31,7 +47,7 @@ export const TreeNode = ({ node, level = 0, openPaths, onToggle }) => {
         <FolderIcon />
         <span className="truncate">{node.name}</span>
       </div>
-      {isOpen && node.children && (
+      {isOpen && node.children && node.children.length > 0 && (
         <div>
           {node.children.map((child, index) => (
             <TreeNode 
