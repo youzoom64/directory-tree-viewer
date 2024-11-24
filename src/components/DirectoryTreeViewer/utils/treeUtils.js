@@ -11,7 +11,7 @@ const SKIP_DIRECTORIES = new Set([
   '.vscode'
 ]);
 
-export const generateTreeText = (node, openPaths, level = 0, isLast = true, parentPrefix = '') => {
+const generateTreeText = (node, openPaths, level = 0, isLast = true, parentPrefix = '') => {
   if (!node) return '';
 
   let text = '';
@@ -53,13 +53,13 @@ export const generateTreeText = (node, openPaths, level = 0, isLast = true, pare
   return text;
 };
 
-export const readDirectory = async (entry, depth = 0) => {
-  const MAX_DEPTH = 20; // 深さの制限
-
-  if (!entry || depth > MAX_DEPTH) return null;
+const readDirectory = async (entry, callbacks = {}) => {
+  const { onFileCount, onFolderCount } = callbacks;
 
   try {
     if (entry.isFile) {
+      // ファイルをカウント
+      onFileCount?.();
       return {
         name: entry.name,
         type: 'file',
@@ -67,21 +67,24 @@ export const readDirectory = async (entry, depth = 0) => {
       };
     }
 
-    // 制限付きディレクトリのチェック
     if (RESTRICTED_DIRECTORIES.has(entry.name)) {
+      // フォルダをカウント
+      onFolderCount?.();
       return {
         name: entry.name,
         type: 'directory',
         path: entry.fullPath || `/${entry.name}`,
         isRestricted: true,
-        children: [] // 子要素は空配列
+        children: []
       };
     }
 
-    // スキップするディレクトリのチェック
     if (SKIP_DIRECTORIES.has(entry.name)) {
       return null;
     }
+
+    // フォルダをカウント
+    onFolderCount?.();
 
     const reader = entry.createReader();
     const entries = await new Promise((resolve, reject) => {
@@ -105,7 +108,7 @@ export const readDirectory = async (entry, depth = 0) => {
     const children = await Promise.all(
       entries.map(async (childEntry) => {
         try {
-          return await readDirectory(childEntry, depth + 1);
+          return await readDirectory(childEntry, { onFileCount, onFolderCount });
         } catch (error) {
           console.error(`Error reading ${childEntry.name}:`, error);
           return null;
@@ -117,15 +120,20 @@ export const readDirectory = async (entry, depth = 0) => {
       name: entry.name,
       type: 'directory',
       path: entry.fullPath || `/${entry.name}`,
-      children: children.filter(Boolean)
+      children: children.filter(Boolean).sort((a, b) => {
+        if (a.type === 'directory' && b.type === 'file') return -1;
+        if (a.type === 'file' && b.type === 'directory') return 1;
+        return a.name.localeCompare(b.name);
+      })
     };
+
   } catch (error) {
-    console.error(`Error reading directory ${entry.name}:`, error);
+    console.error('Directory read error:', error);
     return null;
   }
 };
 
-export const getInitialOpenPaths = (rootNodes) => {
+const getInitialOpenPaths = (rootNodes) => {
   const initialOpenPaths = new Set();
   const addNodePath = (node) => {
     if (!node) return;
@@ -147,7 +155,7 @@ export const getInitialOpenPaths = (rootNodes) => {
   return initialOpenPaths;
 };
 
-export default {
+export {
   generateTreeText,
   readDirectory,
   getInitialOpenPaths,

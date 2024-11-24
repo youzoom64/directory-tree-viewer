@@ -2,8 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Card, CardContent } from './ui/Card';
 import { DropZone } from './ui/DropZone';
 import { TreeNode } from './TreeNode';
-import { readDirectory } from './utils/fileReader';
-import { generateTreeText, getInitialOpenPaths } from './utils/treeUtils';
+import { readDirectory, generateTreeText, getInitialOpenPaths } from './utils/treeUtils';  // 追加
 
 const DirectoryTreeViewer = () => {
   const [structure, setStructure] = useState(null);
@@ -26,13 +25,16 @@ const DirectoryTreeViewer = () => {
       const entries = items
         .map(item => item.webkitGetAsEntry())
         .filter(entry => entry != null);
-
+  
       if (entries.length === 0) {
         throw new Error('No valid entries found');
       }
-
+  
       const results = await Promise.all(
-        entries.map(async entry => readDirectory(entry))
+        entries.map(async entry => readDirectory(entry, {
+          onFileCount: () => setStats(prev => ({ ...prev, files: prev.files + 1 })),
+          onFolderCount: () => setStats(prev => ({ ...prev, folders: prev.folders + 1 }))
+        }))
       );
 
       const validResults = results.filter(Boolean);
@@ -69,7 +71,6 @@ const DirectoryTreeViewer = () => {
     });
   }, []);
 
-  // openPathsが変更されたらテキスト表示を更新
   React.useEffect(() => {
     if (structure && structure[0]) {
       setTextView(generateTreeText(structure[0], openPaths));
